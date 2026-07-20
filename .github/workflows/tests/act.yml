@@ -1,0 +1,178 @@
+name: act
+on: push
+
+jobs:
+  test-action:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          # Built-in templates
+          - name: rustup-builtin
+            config: '{"rustup":{}}'
+            os: Linux
+            arch: x64
+            expect-rustup: rustup-Linux-x64-stable-abc123
+
+          - name: cargo-registry-builtin
+            config: '{"cargo-registry":{}}'
+            os: Linux
+            arch: x64
+            expect-cargo-registry: cargo-registry-Linux-x64-def456
+
+          - name: cargo-build-builtin
+            config: '{"cargo-build":{}}'
+            os: Linux
+            arch: x64
+            expect-cargo-build: cargo-debug-Linux-stable-abc123-src789
+
+          - name: node-modules-builtin
+            config: '{"node-modules":{}}'
+            os: Linux
+            arch: x64
+            expect-node-modules: node-modules-Linux-x64-lock123
+
+          # Custom templates
+          - name: custom-template
+            config: '{"myapp":{"key":"myapp-{os}-{arch}"}}'
+            os: macOS
+            arch: arm64
+            expect-myapp: myapp-macOS-arm64
+
+          - name: custom-restore-keys
+            config: '{"a":{"key":"cache-{os}"},"b":{"key":"data-{arch}","restore-keys":"fallback-"}}'
+            os: Linux
+            arch: x64
+            expect-a: cache-Linux
+            expect-b: data-x64
+            expect-b-restore: fallback-
+
+          # Config format variants
+          - name: yaml-config
+            config: |
+              rustup: {}
+              my-cache:
+                key: myapp-{os}-{arch}
+            os: Linux
+            arch: x64
+            expect-rustup: rustup-Linux-x64-stable-abc
+            expect-my-cache: myapp-Linux-x64
+
+          - name: toml-config
+            config: |
+              [rustup]
+              [custom-cache]
+              key = "myapp-{os}-{arch}"
+            os: Linux
+            arch: x64
+            expect-rustup: rustup-Linux-x64-nightly-def456
+            expect-custom-cache: myapp-Linux-x64
+
+            # Edge cases
+          - name: os-arch-only
+            config: '{"os-arch":{"key":"{os}-{arch}"}}'
+            os: Windows
+            arch: x86
+            expect-os-arch: Windows-x86
+
+          - name: special-chars
+            config: '{"special":{"key":"{os}_{arch}-{toolchain}"}}'
+            os: Linux
+            arch: x64
+            toolchain: beta-2024
+            expect-special: Linux_x64-beta-2024
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Cache bun dependencies
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.bun/install/cache
+            node_modules
+          key: bun-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            bun-${{ runner.os }}-${{ runner.arch }}-
+            bun-${{ runner.os }}-
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+
+      - name: Bun Install
+        run: bun install
+
+      - name: Bun Tests
+        run: bun run test:coverage
+
+      - name: Build
+        run: |
+          bun run build
+
+      - name: Run action
+        id: run
+        uses: ./
+        with:
+          config: ${{ matrix.config }}
+          os: ${{ matrix.os }}
+          arch: ${{ matrix.arch }}
+
+      - name: Validate rustup
+        if: matrix.expect-rustup != ''
+        run: |
+          [ "${{ steps.run.outputs.rustup-key }}" = "${{ matrix.expect-rustup }}" ] || exit 1
+
+      - name: Validate cargo-registry
+        if: matrix.expect-cargo-registry != ''
+        run: |
+          [ "${{ steps.run.outputs.cargo-registry-key }}" = "${{ matrix.expect-cargo-registry }}" ] || exit 1
+
+      - name: Validate cargo-build
+        if: matrix.expect-cargo-build != ''
+        run: |
+          [ "${{ steps.run.outputs.cargo-build-key }}" = "${{ matrix.expect-cargo-build }}" ] || exit 1
+
+      - name: Validate node-modules
+        if: matrix.expect-node-modules != ''
+        run: |
+          [ "${{ steps.run.outputs.node-modules-key }}" = "${{ matrix.expect-node-modules }}" ] || exit 1
+
+      - name: Validate custom template
+        if: matrix.expect-myapp != ''
+        run: |
+          [ "${{ steps.run.outputs.myapp-key }}" = "${{ matrix.expect-myapp }}" ] || exit 1
+
+      - name: Validate custom restore keys
+        if: matrix.expect-a != ''
+        run: |
+          [ "${{ steps.run.outputs.a-key }}" = "${{ matrix.expect-a }}" ] || exit 1
+          [ "${{ steps.run.outputs.b-key }}" = "${{ matrix.expect-b }}" ] || exit 1
+          [ "${{ steps.run.outputs.b-restore-keys }}" = "${{ matrix.expect-b-restore }}" ] || exit 1
+
+      - name: Validate YAML config
+        if: matrix.expect-rustup != '' && matrix.expect-my-cache != ''
+        run: |
+          [ "${{ steps.run.outputs.rustup-key }}" = "${{ matrix.expect-rustup }}" ] || exit 1
+          [ "${{ steps.run.outputs.my-cache-key }}" = "${{ matrix.expect-my-cache }}" ] || exit 1
+
+      - name: Validate TOML config
+        if: matrix.expect-rustup != '' && matrix.expect-custom-cache != ''
+        run: |
+          [ "${{ steps.run.outputs.rustup-key }}" = "${{ matrix.expect-rustup }}" ] || exit 1
+          [ "${{ steps.run.outputs.custom-cache-key }}" = "${{ matrix.expect-custom-cache }}" ] || exit 1
+
+      - name: Validate os-arch
+        if: matrix.expect-os-arch != ''
+        run: |
+          [ "${{ steps.run.outputs.os-arch-key }}" = "${{ matrix.expect-os-arch }}" ] || exit 1
+
+      - name: Validate special chars
+        if: matrix.expect-special != ''
+        run: |
+          [ "${{ steps.run.outputs.special-key }}" = "${{ matrix.expect-special }}" ] || exit 1
+
+      - name: Echo os/arch
+        run: |
+          echo "os: ${{ steps.run.outputs.os }}"
+          echo "arch: ${{ steps.run.outputs.arch }}"

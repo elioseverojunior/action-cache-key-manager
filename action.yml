@@ -1,0 +1,80 @@
+name: "Cache Keys Manager"
+description: "Generate standardized cache keys with automatic restore-key fallback chains"
+author: "elioseverojunior"
+
+inputs:
+  config:
+    description: >
+      JSON, YAML, or TOML object mapping cache names to template configs.
+      Built-in types: rustup, cargo-registry, cargo-build, node-modules.
+      Example: {"rustup":{},"my-cache":{"key":"myapp-{os}-{arch}"}}
+    required: true
+  os:
+    description: Runner OS
+    default: ${{ runner.os }}
+    required: false
+  arch:
+    description: Runner OS
+    default: ${{ runner.arch }}
+    required: false
+
+outputs:
+  # Dynamic outputs per cache name (from config):
+  # <name>-key
+  # <name>-restore-keys
+  #
+  # Examples used in test workflow:
+  rustup-key:
+    description: "Generated cache key for 'rustup' built-in"
+  rustup-restore-keys:
+    description: "Generated restore keys for 'rustup' built-in"
+  cargo-registry-key:
+    description: "Generated cache key for 'cargo-registry' built-in"
+  cargo-registry-restore-keys:
+    description: "Generated restore keys for 'cargo-registry' built-in"
+  cargo-build-key:
+    description: "Generated cache key for 'cargo-build' built-in"
+  cargo-build-restore-keys:
+    description: "Generated restore keys for 'cargo-build' built-in"
+  node-modules-key:
+    description: "Generated cache key for 'node-modules' built-in"
+  node-modules-restore-keys:
+    description: "Generated restore keys for 'node-modules' built-in"
+  myapp-key:
+    description: "Generated cache key for 'myapp' custom template"
+  a-key:
+    description: "Generated cache key for 'a' entry"
+  a-restore-keys:
+    description: "Generated restore keys for 'a' entry"
+  b-key:
+    description: "Generated cache key for 'b' entry"
+  b-restore-keys:
+    description: "Generated restore keys for 'b' entry"
+  my-cache-key:
+    description: "Generated cache key for 'my-cache' entry"
+  my-cache-restore-keys:
+    description: "Generated restore keys for 'my-cache' entry"
+  custom-cache-key:
+    description: "Generated cache key for 'custom-cache' entry"
+  custom-cache-restore-keys:
+    description: "Generated restore keys for 'custom-cache' entry"
+  os-arch-key:
+    description: "Generated cache key for 'os-arch' entry"
+  os-arch-restore-keys:
+    description: "Generated restore keys for 'os-arch' entry"
+  special-key:
+    description: "Generated cache key for 'special' entry"
+  special-restore-keys:
+    description: "Generated restore keys for 'special' entry"
+  os:
+    description: "Resolved OS value"
+  arch:
+    description: "Resolved architecture value"
+
+runs:
+  using: node24
+  main: "dist/action/index.js"
+
+branding:
+  icon: "archive"
+  color: "gray-dark"
